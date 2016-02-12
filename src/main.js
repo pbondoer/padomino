@@ -16,6 +16,11 @@ var C_ORANGE = 0x33;
 var C_YELLOW = 0x32;
 var C_GREEN = 0x30;
 
+var C_BLOCKS = 1;
+var C_LAST   = 2;
+var C_FALL   = 3;
+var C_CLEAR  = 4;
+
 // midi functions
 function onMIDISuccess(midi) {
     // when we get a succesful response, run this code
@@ -55,13 +60,11 @@ function onMIDISuccess(midi) {
     //TODO: Check if we successfully found our Launchpad
 }
 
-function dataToPos(data)
-{
+function dataToPos(data) {
     return {x: data & 0x0F, y: data >> 4};
 }
 
-function posToData(pos)
-{
+function posToData(pos) {
     return (pos.y << 4) + pos.x;
 }
 
@@ -78,15 +81,12 @@ function toggleDoubleBuffering() {
     else
         switchBuffer();
 }
-
-function switchBuffer()
-{
+function switchBuffer() {
     if (buffer)
         launchpad.send([0xB0, 0x00, 0x31]);
     else
         launchpad.send([0xB0, 0x00, 0x34]);        
     buffer = !buffer;
-    console.log("switched to buffer " + buffer);
     if (!doubleBuffering)
         doubleBuffering = 1;
 }
@@ -99,31 +99,30 @@ var map = [ 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0 ];
-
 var prevMap = map.slice(0);
 
-function mapToColor(i)
-{
+function mapToColor(i) {
     if (i == 0)
         return 0x00;
-    else if (i == 1)
+    else if (i == C_BLOCKS)
         return C_RED;
-    else if (i == 2)
-        return C_YELLOW;
-    else if (i == 3)
+    else if (i == C_LAST)
         return C_ORANGE;
-    else if (i == 4)
+    else if (i == C_FALL)
+        return C_YELLOW;
+    else if (i == C_CLEAR)
         return C_GREEN;
 }
-
-function render(output) {
-    for (var i = 0; i < 8 * 8; i++)
+function cleanMap(a, b) {
+    for (i = 0; i < 64; i++)
     {
-        //map[i] = !map[i];
-        map[i] = Math.round(Math.random() * 4);
+        if (map[i] == a)
+            map[i] = b;
     }
-    console.log(map);
-    console.log(prevMap);
+}
+
+function render() {
+    merge_map();
     
     for (i = 0; i < 64; i++)
     {
@@ -149,6 +148,11 @@ function onMIDIMessage(e) {
         console.log("Button " + (e.data[2] ? "pressed" : "released"));
         if (e.data[2])
         {
+            if(dataToPos(e.data[1]).x < 4)
+                cur_pos.x--;
+            else
+                cur_pos.x++;
+            
             render();
             //launchpad.send([0x90, posToData(dataToPos(e.data[1])), 127]);
         } else {
@@ -163,3 +167,100 @@ function onMIDIFailure(e) {
     // when we get a failed response, run this code
     console.log("No access to MIDI devices or your browser doesn't support WebMIDI API. Please use WebMIDIAPIShim " + e);
 }
+
+// TETRIS
+
+var pieces = 
+    [
+        [3, 2,
+         0, 1, 1,
+         1, 1, 0],
+        
+        [4, 1,
+         1, 1, 1, 1],
+        
+        [3, 2,
+         1, 1, 1,
+         0, 1, 0],
+        
+        [3, 2,
+         1, 1, 0,
+         0, 1, 1],
+        
+        [2, 2,
+         1, 1,
+         1, 1],
+        
+        [2, 3,
+         1, 0,
+         1, 0,
+         1, 1],
+        
+        [2, 3,
+         0, 1,
+         0, 1,
+         1, 1]
+    ];
+
+var cur_pos;
+
+var tetri;
+var w;
+var h;
+
+function random_piece()
+{
+    tetri = pieces[Math.round(Math.random() * (pieces.length - 1))].slice(0);
+    rotate();
+    cur_pos = {x: 4 - Math.floor(tetri[0] / 2), y: 0};
+    
+    tetri = tetri.slice(0);
+    
+    w = tetri.shift();
+    h = tetri.shift();
+}
+
+function rotate()
+{
+    //TODO: Rotate
+}
+
+random_piece();
+
+function place(i)
+{
+    for(var y = 0; y < h; y++)
+    {
+        for(var x = 0; x < w; x++)
+        {
+            if (tetri[y * w + x])
+                map[(y + cur_pos.y - (h - 1)) * 8 + (x + cur_pos.x)] = i;
+        }
+    }
+}
+
+function merge_map()
+{
+    cleanMap(C_FALL, 0);
+    place(C_FALL);
+}
+
+function update()
+{
+    render();
+}
+
+function gravity()
+{
+    cur_pos.y++;
+    if (cur_pos.y >= 7)
+    {
+        cleanMap(C_LAST, C_BLOCKS);
+        place(C_LAST);
+        random_piece();
+    }
+    update();
+}
+
+setInterval(update, 100);
+setInterval(gravity, 1000);
