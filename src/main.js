@@ -144,22 +144,40 @@ function onMIDIMessage(e) {
     //2 - velocity
     
     if (e.data[0] == 144) {
+        var pos = dataToPos(e.data[1]);
         // Note on        
-        console.log("Button " + (e.data[2] ? "pressed" : "released"));
+        console.log("Button " + (e.data[2] ? "pressed" : "released") + " at " + pos);
         if (e.data[2])
         {
-            if(dataToPos(e.data[1]).x < 4)
-                cur_pos.x--;
+            if (pos.y < 2)
+                if(pos.x < 4)
+                {
+                    console.log("rotate left");
+                    rotate();
+                }
+                else
+                {
+                    console.log("rotate right");
+                }
+            else if(pos.y >= 6)
+            {
+                cur_pos.y = 7;
+                drop();
+                console.log("drop");           
+            }
             else
-                cur_pos.x++;
-            
+            {
+                console.log(cur_pos);
+                if(pos.x < 4 && cur_pos.x > 0)
+                    cur_pos.x--;
+                else if(pos.x >= 4 && cur_pos.x < 8 - w)
+                    cur_pos.x++;
+               
+            }
             render();
             //launchpad.send([0x90, posToData(dataToPos(e.data[1])), 127]);
         } else {
-            
-            //launchpad.send([0x80, e.data[1], 0x00]);
         }
-        console.log(dataToPos(e.data));
     }
 }
 
@@ -172,34 +190,47 @@ function onMIDIFailure(e) {
 
 var pieces = 
     [
-        [3, 2,
+        // S
+        [3, 2, 0,
          0, 1, 1,
-         1, 1, 0],
-        
-        [4, 1,
-         1, 1, 1, 1],
-        
-        [3, 2,
-         1, 1, 1,
-         0, 1, 0],
-        
-        [3, 2,
          1, 1, 0,
-         0, 1, 1],
+         0, 0, 0],
         
-        [2, 2,
+        // I
+        [4, 1, 1,
+         0, 0, 0, 0,
+         1, 1, 1, 1,
+         0, 0, 0, 0,
+         0, 0, 0, 0],
+        
+        // T
+        [3, 2, 0,
+         0, 1, 0, 
+         1, 1, 1,
+         0, 0, 0],
+        
+        // Z
+        [3, 2, 0,
+         1, 1, 0,
+         0, 1, 1,
+         0, 0, 0],
+        
+        // O
+        [2, 2, 0,
          1, 1,
          1, 1],
         
-        [2, 3,
-         1, 0,
-         1, 0,
-         1, 1],
+        // L
+        [3, 2, 0,
+         0, 0, 1,
+         1, 1, 1,
+         0, 0, 0],
         
-        [2, 3,
-         0, 1,
-         0, 1,
-         1, 1]
+        // J
+        [3, 2, 0,
+         1, 0, 0,
+         1, 1, 1,
+         0, 0, 0]
     ];
 
 var cur_pos;
@@ -207,22 +238,50 @@ var cur_pos;
 var tetri;
 var w;
 var h;
+var offset;
+var size;
 
 function random_piece()
 {
     tetri = pieces[Math.round(Math.random() * (pieces.length - 1))].slice(0);
-    rotate();
+    tetri = pieces[1];
     cur_pos = {x: 4 - Math.floor(tetri[0] / 2), y: 0};
     
     tetri = tetri.slice(0);
     
     w = tetri.shift();
     h = tetri.shift();
+    offset = tetri.shift();
+    size = Math.max(w, h);
+}
+
+function calc(x, y, width)
+{
+    return (x * width + y);
 }
 
 function rotate()
 {
-    //TODO: Rotate
+    
+    console.log(tetri);
+    var temp;
+    
+    for (var x = 0; x < size; x++)
+        for(var y = 0; y < size; y++)
+            {
+                temp = tetri[calc(x, y, size)];
+                tetri[calc(x, y, size)] = tetri[calc(y, size - 1 - y, size)];
+                tetri[calc(y, size - 1 - y, size)] = tetri[calc(size - 1 - x, size - 1 - y, size)];
+                tetri[calc(size - 1 - x, size - 1 - y, size)] = tetri[calc(size - 1 - y, x, size)];
+                tetri[calc(size - 1 - y, x, size)] = temp;
+            }
+    
+    temp = w;
+    w = h;
+    h = temp;
+    
+    console.log("w = " + w + "; h = " + h);
+    console.log(tetri);
 }
 
 random_piece();
@@ -233,8 +292,8 @@ function place(i)
     {
         for(var x = 0; x < w; x++)
         {
-            if (tetri[y * w + x])
-                map[(y + cur_pos.y - (h - 1)) * 8 + (x + cur_pos.x)] = i;
+            if (tetri[(y + offset) * w + x])
+                map[calc((y + cur_pos.y - Math.floor(h / 2)), (x + cur_pos.x), 8)] = i;
         }
     }
 }
@@ -250,11 +309,12 @@ function update()
     render();
 }
 
-function gravity()
+function drop()
 {
     cur_pos.y++;
     if (cur_pos.y >= 7)
     {
+        cur_pos.y = 7;
         cleanMap(C_LAST, C_BLOCKS);
         place(C_LAST);
         random_piece();
@@ -263,4 +323,4 @@ function gravity()
 }
 
 setInterval(update, 100);
-setInterval(gravity, 1000);
+setInterval(drop, 1000);
